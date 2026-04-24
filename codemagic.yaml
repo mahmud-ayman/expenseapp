@@ -1,0 +1,50 @@
+workflows:
+  ios-workflow:
+    name: iOS IPA Build - Expenses
+    instance_type: mac_mini_m1
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: 16.2
+      cocoapods: default
+    cache:
+      cache_paths:
+        - $HOME/.pub-cache
+        - $FLUTTER_ROOT/.pub-cache
+        - ios/Pods
+    scripts:
+      - name: Get Flutter packages
+        script: |
+          flutter clean
+          flutter pub get
+      - name: Install Pods
+        script: |
+          cd ios
+          pod install
+      - name: Build Unsigned iOS IPA
+        script: |
+          set -e
+          # بناء بدون حساب مطور
+          flutter build ios --release --no-codesign --no-tree-shake-icons
+          
+          # إنشاء هيكل IPA
+          mkdir -p build/ios/ipa/Payload
+          
+          # ابحث عن Runner.app
+          APP_PATH=$(find build/ios -name "Runner.app" -type d | head -n 1)
+          echo "Found app at: $APP_PATH"
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: Runner.app not found!"
+            exit 1
+          fi
+          
+          # انسخ التطبيق كامل
+          cp -R "$APP_PATH" build/ios/ipa/Payload/
+          
+          # ضغط صحيح باستخدام ditto
+          cd build/ios/ipa
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload Expenses_Unsigned.ipa
+    artifacts:
+      - build/ios/ipa/Expenses_Unsigned.ipa
+      - /tmp/xcodebuild_logs/*.log
